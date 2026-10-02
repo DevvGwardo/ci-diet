@@ -1,0 +1,30 @@
+# Copy to .github/workflows/ci.yml in your repo and edit the commands.
+name: ci
+
+on:
+  pull_request:
+  schedule:
+    - cron: '17 9 * * *' # nightly full suite (skipped if nothing changed)
+  workflow_dispatch: # full suite on demand: gh workflow run ci -r <branch>
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  ci:
+    uses: DevvGwardo/ci-diet/.github/workflows/ci-diet.yml@v1
+    with:
+      node-version: '22'
+      setup-command: npm ci
+      quick-command: |
+        npx tsc --noEmit
+        npx vitest run --changed "$CI_DIET_BASE"
+      full-command: |
+        npx vitest run
+        npm run build
+      release-branch-prefix: release/
+    # secrets: inherit  # if your commands need repo secrets

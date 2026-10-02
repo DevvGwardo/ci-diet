@@ -1,0 +1,27 @@
+name: self-test
+
+# Exercises ci-diet against itself on every PR, nightly and on demand.
+
+on:
+  pull_request:
+  schedule:
+    - cron: '17 9 * * 1'
+  workflow_dispatch:
+
+concurrency:
+  group: self-test-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  ci:
+    uses: ./.github/workflows/ci-diet.yml
+    with:
+      quick-command: |
+        test -n "$CI_DIET_BASE"
+        git rev-parse --verify "$CI_DIET_BASE"
+        echo "changed vs $CI_DIET_BASE:"; git diff --name-only "$CI_DIET_BASE"...HEAD
+      full-command: echo "full suite ran on $GITHUB_EVENT_NAME"
+      release-branch-prefix: release/

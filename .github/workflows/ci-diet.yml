@@ -1,0 +1,122 @@
+name: ci-diet
+
+# Reusable tiered CI. Call it from your repo's own workflow (see README):
+#
+#   pull_request                 -> quick: setup + quick-command
+#   PR from <release-prefix>*    -> full as well
+#   schedule                     -> full, skipped if nothing was committed
+#                                   in the last <nightly-window-hours>
+#   workflow_dispatch / other    -> full
+#
+# The quick job exports CI_DIET_BASE (e.g. origin/main) so the quick command
+# can select only affected tests: vitest --changed "$CI_DIET_BASE",
+# jest --changedSince="$CI_DIET_BASE", etc.
+
+on:
+  workflow_call:
+    inputs:
+      quick-command:
+        description: Command run on every PR. Keep it fast (typecheck, lint, affected tests).
+        type: string
+        required: true
+      full-command:
+        description: Command for the full suite (nightly, release PRs, manual runs).
+        type: string
+        required: true
+      setup-command:
+        description: Command run before either job (e.g. `npm ci`). Empty to skip.
+        type: string
+        default: ''
+      node-version:
+        description: If set, runs actions/setup-node with this version and npm caching.
+        type: string
+        default: ''
+      release-branch-prefix:
+        description: PRs whose head branch starts with this also run the full suite. Empty to disable.
+        type: string
+        default: 'release/'
+      nightly-window-hours:
+        description: Scheduled runs skip when the newest commit is older than this. 0 always runs.
+        type: number
+        default: 25
+      runs-on:
+        description: Runner label for both jobs.
+        type: string
+        default: ubuntu-latest
+      quick-timeout-minutes:
+        type: number
+        default: 10
+      full-timeout-minutes:
+        type: number
+        default: 30
+
+permissions:
+  contents: read
+
+jobs:
+  quick:
+    name: quick
+    if: github.event_name == 'pull_request'
+    runs-on: ${{ inputs.runs-on }}
+    timeout-minutes: ${{ inputs.quick-timeout-minutes }}
+    env:
+      CI_DIET_BASE: origin/${{ github.base_ref }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Affected-test selection diffs against the base branch.
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        if: inputs.node-version != ''
+        with:
+          node-version: ${{ inputs.node-version }}
+          cache: npm
+      - name: Setup
+        if: inputs.setup-command != ''
+        env:
+          CMD: ${{ inputs.setup-command }}
+        run: bash -eo pipefail -c "$CMD"
+      - name: Quick checks
+        env:
+          CMD: ${{ inputs.quick-command }}
+        run: bash -eo pipefail -c "$CMD"
+
+  full:
+    name: full
+    if: >-
+      github.event_name != 'pull_request' ||
+      (inputs.release-branch-prefix != '' &&
+       startsWith(github.head_ref, inputs.release-branch-prefix))
+    runs-on: ${{ inputs.runs-on }}
+    timeout-minutes: ${{ inputs.full-timeout-minutes }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Skip scheduled run if nothing changed
+        id: gate
+        env:
+          WINDOW_HOURS: ${{ inputs.nightly-window-hours }}
+        run: |
+          run=true
+          if [ "$GITHUB_EVENT_NAME" = schedule ] && [ "$WINDOW_HOURS" -gt 0 ]; then
+            age=$(( $(date +%s) - $(git log -1 --format=%ct) ))
+            if [ "$age" -gt $(( WINDOW_HOURS * 3600 )) ]; then
+              echo "Newest commit is $(( age / 3600 ))h old (window ${WINDOW_HOURS}h); skipping."
+              run=false
+            fi
+          fi
+          echo "run=$run" >> "$GITHUB_OUTPUT"
+      - uses: actions/setup-node@v4
+        if: steps.gate.outputs.run == 'true' && inputs.node-version != ''
+        with:
+          node-version: ${{ inputs.node-version }}
+          cache: npm
+      - name: Setup
+        if: steps.gate.outputs.run == 'true' && inputs.setup-command != ''
+        env:
+          CMD: ${{ inputs.setup-command }}
+        run: bash -eo pipefail -c "$CMD"
+      - name: Full suite
+        if: steps.gate.outputs.run == 'true'
+        env:
+          CMD: ${{ inputs.full-command }}
+        run: bash -eo pipefail -c "$CMD"
