@@ -20,6 +20,10 @@ times it matters.
 | Manual (`workflow_dispatch`) | `full` | the whole suite, on any branch |
 | Push to main | nothing | every change already ran `quick` on its PR; the nightly covers the rest |
 
+<p align="center">
+  <img src="assets/pipeline-flow.jpg" alt="ci-diet Pipeline Architecture Flow" width="100%" />
+</p>
+
 ## Real numbers
 
 On one private Electron/React repo (3.3k tests, 7–8.5 min suite, agents
@@ -29,6 +33,10 @@ merging ~10 PRs a day), the old setup ran the full suite on `pull_request`
 With ci-diet, the PR check (typecheck + affected tests) takes about 40 s. The
 projected total is **300–500 minutes a month**: the nightly full run costs at
 most ~250, and PR checks cost the rest.
+
+<p align="center">
+  <img src="assets/savings-comparison.jpg" alt="Traditional CI vs ci-diet Savings Comparison" width="100%" />
+</p>
 
 ## Quick start
 
@@ -68,6 +76,10 @@ The `quick` job exports `CI_DIET_BASE` (for example `origin/main`) with full
 git history, so your test runner can pick only the tests the PR touches.
 
 ### Affected-test recipes
+
+<p align="center">
+  <img src="assets/affected-tests-engine.jpg" alt="Affected Test Selection via CI_DIET_BASE" width="100%" />
+</p>
 
 | Runner | `quick-command` |
 |---|---|
