@@ -1,5 +1,5 @@
 <p align="center">
-  <img src=".github/assets/banner.png" alt="ci-diet: put your CI on a diet" width="100%">
+  <img src="assets/banner.jpg" alt="ci-diet Banner" />
 </p>
 
 # ci-diet
